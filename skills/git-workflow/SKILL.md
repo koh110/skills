@@ -17,15 +17,25 @@ description: 'Git repositoryとGitHub deliveryでcontext確認、branch/worktree
 
 このskillはGit操作そのもののportableな安全contractを定義します。GitHubのIssue/Project/PR deliveryが関係する場合は、同じpackage内の`references/github-pr-workflow.md`を追加で読みます。GitHub lifecycleを別のtop-level skillへ分割せず、Gitのlocal mechanicsとremote deliveryを一つのworkflow packageとして扱います。
 
-次はこのskillの責務ではありません。
+次の設定は、このskillが全repositoryに一律で固定するものではなく、repository/user policyまたはruntime adapterで決めます。
 
-- root checkoutを作業場所にしてよいか
+- root checkoutを作業場所として許可するか
 - worktreeを必須にするか、どのdirectoryへ置くか
 - branch naming convention
 - commit署名失敗時にunsigned commitを許可するか
 - 既存PRを別branchへ分割してよいか
 
-それらはrepository/user policyまたはruntime adapterで決めます。
+ただし、適用されるpolicyを読み、作業場所とbranchを選ぶこと自体はGit Workflowの必須preflightです。現在のcwdがroot checkoutであることだけを理由に、そこを作業場所として選んではいけません。
+
+## Choose the working checkout
+
+最初のwriteより前に、repository/user policyを適用し、作業用checkoutとbranchを選びます。
+
+- policyが専用linked worktreeを求める場合は必ず従い、branch作成や編集を始める前に用意する。
+- policyが指定していない場合も、独立したcode changeや並行作業では専用linked worktreeを既定にする。primary checkoutを使うのは、user/repository policyが許可し、隔離が不要と判断できる場合に限る。
+- `git switch -c` は現在のcheckout上でbranchを作るだけで、作業場所を分離しない。primary checkoutから隔離する場合は `git worktree add` を使う。
+- primary checkoutに既存変更がある場合、それをstash/reset/branch-switchで片付けない。同じ作業の継続としてそのcheckoutを使うことが明示的に許可されている場合を除き、独立作業用の専用worktreeを検証したbaseから作る。誤ったcheckoutですでに編集した場合は、`Recover edits from the wrong checkout` の手順で移し、両方のstatus/diffを確認する。
+- 最初のwrite前にrepository root、選択したworktree path、branch、HEAD、statusを確認する。
 
 ## Inspect context
 
@@ -103,6 +113,8 @@ git status --short
 ```
 
 既存変更がある場合、branch作成後にstatus/diffが保持されていることを確認します。
+
+この手順は現在のcheckoutでdetached HEADを解消するだけで、作業場所を分離しません。primary checkoutから隔離する必要がある場合、そこでbranchを作らず `git worktree add` を使います。
 
 ## Recover edits from the wrong checkout
 
