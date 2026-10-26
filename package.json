@@ -1,0 +1,16 @@
+{
+  "name": "koh110-skills",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test --test-concurrency=1",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "6.0.3"
+  }
+}
