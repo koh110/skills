@@ -134,6 +134,24 @@ The job running on runner ... has exceeded the maximum execution time
 - Fix the underlying performance issue
 - Split into parallel jobs
 
+#### Oversized Dependency Cache Restore
+
+**Signatures in logs:**
+- A setup/cache step spends most of the job restoring a very large dependency archive, or times out before installation/build begins.
+
+**Diagnosis:**
+1. Read the exact cache step logs; distinguish restore duration and archive size from the later install/build time.
+2. Inventory every job and workflow using the same cache configuration/key; one workflow may restore the cache independently in multiple jobs.
+
+**Common fixes:**
+- Disable caching only in affected jobs when restore cost exceeds a deterministic fresh install.
+- Keep the lockfile-based install and required safety flags (for example, `npm ci --ignore-scripts` where required); do not skip installation or weaken script policy.
+- Preserve unrelated caches that are not implicated in the failure.
+
+**Verification:**
+- Rerun the exact head and verify every affected job, not just the first job edited.
+- After removing the bottleneck, inspect all newly reached steps; treat a separate failure as a new root cause and do not blindly retry it.
+
 ---
 
 ### Docker / Container Failures
