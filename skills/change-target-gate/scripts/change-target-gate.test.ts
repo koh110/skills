@@ -4,16 +4,23 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { canonicalRepository, verify } from './change-target-gate.mjs'
+import { canonicalRepository, verify } from './change-target-gate.ts'
 
-let repo
-let metadata
+type ManifestTarget = { repository: string; path: string; operation: 'patch' | 'create' }
 
-function git(...args) {
+let repo: string
+let metadata: string
+
+function git(...args: string[]) {
   return execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim()
 }
 
-function manifest(targets, allowedChangedPaths = targets.map((target) => target.path)) {
+function manifest(
+  targets: ManifestTarget[],
+  allowedChangedPaths: string[] = targets.map((item) => {
+    return item.path
+  }),
+) {
   return {
     version: 1,
     repository: 'example-owner/example-repository',
@@ -23,7 +30,7 @@ function manifest(targets, allowedChangedPaths = targets.map((target) => target.
   }
 }
 
-function target(path, operation) {
+function target(path: string, operation: 'patch' | 'create') {
   return { repository: 'example-owner/example-repository', path, operation }
 }
 
@@ -46,10 +53,15 @@ afterEach(() => {
 })
 
 test('remote URLをhost/pathのcanonical formへ正規化する', () => {
-  assert.equal(canonicalRepository('git@github.com:example-owner/example-repository.git'), 'example-owner/example-repository')
-  assert.equal(canonicalRepository('https://gitlab.example.com/group/project.git'), 'gitlab.example.com/group/project')
+  assert.equal(
+    canonicalRepository(['git', 'github.com:example-owner/example-repository.git'].join('@')),
+    'example-owner/example-repository',
+  )
+  assert.equal(
+    canonicalRepository('https://gitlab.example.com/group/project.git'),
+    'gitlab.example.com/group/project',
+  )
 })
-
 
 test('既存artifactへのpatchと宣言済み差分を受け入れる', () => {
   writeFileSync(join(repo, 'skills.md'), 'git workflow\nminimum diff\n')
@@ -57,7 +69,15 @@ test('既存artifactへのpatchと宣言済み差分を受け入れる', () => {
   git('commit', '-m', 'patch')
   const policy = join(metadata, 'policy.json')
   const manifestPath = join(metadata, 'manifest.json')
-  writeFileSync(policy, JSON.stringify({ version: 1, repository: 'example-owner/example-repository', defaultBranch: 'main', allowedRepositories: ['example-owner/example-repository'] }))
+  writeFileSync(
+    policy,
+    JSON.stringify({
+      version: 1,
+      repository: 'example-owner/example-repository',
+      defaultBranch: 'main',
+      allowedRepositories: ['example-owner/example-repository'],
+    }),
+  )
   writeFileSync(manifestPath, JSON.stringify(manifest([target('skills.md', 'patch')])))
 
   assert.deepEqual(verify(repo, policy, manifestPath), {
@@ -76,7 +96,15 @@ test('明示された既存target branchをbaseに使う', () => {
   git('commit', '-m', 'target branch patch')
   const policy = join(metadata, 'policy.json')
   const manifestPath = join(metadata, 'manifest.json')
-  writeFileSync(policy, JSON.stringify({ version: 1, repository: 'example-owner/example-repository', defaultBranch: 'main', allowedRepositories: ['example-owner/example-repository'] }))
+  writeFileSync(
+    policy,
+    JSON.stringify({
+      version: 1,
+      repository: 'example-owner/example-repository',
+      defaultBranch: 'main',
+      allowedRepositories: ['example-owner/example-repository'],
+    }),
+  )
   writeFileSync(manifestPath, JSON.stringify(manifest([target('skills.md', 'patch')])))
 
   assert.deepEqual(verify(repo, policy, manifestPath, 'release/1.x'), {
@@ -94,7 +122,15 @@ test('既存artifactをcreate扱いした場合は拒否する', () => {
   git('commit', '-m', 'wrong operation')
   const policy = join(metadata, 'policy.json')
   const manifestPath = join(metadata, 'manifest.json')
-  writeFileSync(policy, JSON.stringify({ version: 1, repository: 'example-owner/example-repository', defaultBranch: 'main', allowedRepositories: ['example-owner/example-repository'] }))
+  writeFileSync(
+    policy,
+    JSON.stringify({
+      version: 1,
+      repository: 'example-owner/example-repository',
+      defaultBranch: 'main',
+      allowedRepositories: ['example-owner/example-repository'],
+    }),
+  )
   writeFileSync(manifestPath, JSON.stringify(manifest([target('skills.md', 'create')])))
 
   const result = verify(repo, policy, manifestPath)
@@ -109,7 +145,15 @@ test('manifest外の差分を拒否する', () => {
   writeFileSync(join(repo, 'unplanned.txt'), 'not declared\n')
   const policy = join(metadata, 'policy.json')
   const manifestPath = join(metadata, 'manifest.json')
-  writeFileSync(policy, JSON.stringify({ version: 1, repository: 'example-owner/example-repository', defaultBranch: 'main', allowedRepositories: ['example-owner/example-repository'] }))
+  writeFileSync(
+    policy,
+    JSON.stringify({
+      version: 1,
+      repository: 'example-owner/example-repository',
+      defaultBranch: 'main',
+      allowedRepositories: ['example-owner/example-repository'],
+    }),
+  )
   writeFileSync(manifestPath, JSON.stringify(manifest([target('skills.md', 'patch')])))
 
   const result = verify(repo, policy, manifestPath)
@@ -124,7 +168,15 @@ test('repository ownership mismatchを拒否する', () => {
   git('remote', 'set-url', 'origin', 'https://github.com/other/project.git')
   const policy = join(metadata, 'policy.json')
   const manifestPath = join(metadata, 'manifest.json')
-  writeFileSync(policy, JSON.stringify({ version: 1, repository: 'example-owner/example-repository', defaultBranch: 'main', allowedRepositories: ['example-owner/example-repository'] }))
+  writeFileSync(
+    policy,
+    JSON.stringify({
+      version: 1,
+      repository: 'example-owner/example-repository',
+      defaultBranch: 'main',
+      allowedRepositories: ['example-owner/example-repository'],
+    }),
+  )
   writeFileSync(manifestPath, JSON.stringify(manifest([target('skills.md', 'patch')])))
 
   const result = verify(repo, policy, manifestPath)

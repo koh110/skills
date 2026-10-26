@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ESNext",
+    "types": ["node"],
+    "verbatimModuleSyntax": true
+  },
+  "include": [
+    "deploy.ts",
+    "lib/**/*.ts",
+    "tests/**/*.ts",
+    "skills/change-target-gate/scripts/change-target-gate.ts",
+    "skills/change-target-gate/scripts/change-target-gate.test.ts"
+  ]
+}

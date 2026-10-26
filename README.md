@@ -11,14 +11,14 @@
 
 ## 配布
 
-`deploy.mjs` は package の snapshot を `~/.agents/skills` に実ファイルとして配置します。第三者 Skill は保持し、managed snapshot に手編集との競合がある場合は fail closed になります。Claude Code には互換 symlink を設定し、Codex / Copilot の旧runtime別 copy は整理します。
+`deploy.ts` は Node.js の native type stripping で実行し、package の snapshot を `~/.agents/skills` に実ファイルとして配置します。Node.js 22.6.0 以降が必要です。第三者 Skill は保持し、managed snapshot に手編集との競合がある場合は fail closed になります。Claude Code には互換 symlink を設定し、Codex / Copilot の旧runtime別 copy は整理します。
 
 ```bash
-node deploy.mjs --all
-node deploy.mjs --codex
-node deploy.mjs --copilot
-node deploy.mjs --claude
-node deploy.mjs --claude --check
+node --experimental-strip-types deploy.ts --all
+node --experimental-strip-types deploy.ts --codex
+node --experimental-strip-types deploy.ts --copilot
+node --experimental-strip-types deploy.ts --claude
+node --experimental-strip-types deploy.ts --claude --check
 ```
 
 `--force` は確認済みの競合を上書きするときだけ指定してください。`--check` は Claude Code の既存展開との drift check 用です。従来の展開状態を引き継ぐため、manifest のファイル名 `~/.agents/.dotfiles-skills-manifest.json` は互換性維持の目的で残しています。

@@ -11,51 +11,133 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 
-export class SkillDeployConflictError extends Error {
-  constructor(conflicts) {
-    super('skill deployment conflicts detected')
-    this.name = 'SkillDeployConflictError'
-    this.conflicts = conflicts
-  }
+export type AgentRuntime = 'claude' | 'codex' | 'copilot'
+type SkillConflict = { path: string; reason: string }
+type SkillManifest = { version: 1; entries: string[]; paths: Record<string, string> }
+type SkillDeployConflict = Error & { name: string; conflicts: SkillConflict[] }
+type RuntimeChange = {
+  path: string
+  action: 'create-symlink' | 'replace-symlink' | 'remove-legacy' | 'replace-with-symlink'
+}
+type RuntimeMode = 'remove' | 'symlink'
+
+type SnapshotOptions = {
+  sourceDir: string
+  targetDir: string
+  manifestPath: string
 }
 
-async function exists(path) {
+type DeploySnapshotOptions = SnapshotOptions & { force?: boolean; check?: boolean }
+type ReconcileRuntimeOptions = {
+  canonicalDir: string
+  runtimeSkillsDir: string
+  mode: RuntimeMode
+  force?: boolean
+  replaceRealEntries?: boolean
+  check?: boolean
+}
+type DeployAgentSkillsOptions = {
+  sourceDir: string
+  homeDir: string
+  runtimes: AgentRuntime[]
+  force?: boolean
+  check?: boolean
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item: unknown) => {
+      return typeof item === 'string'
+    })
+  )
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  if (!isRecord(value)) return false
+  return Object.values(value).every((item: unknown) => {
+    return typeof item === 'string'
+  })
+}
+
+function isSkillConflict(value: unknown): value is SkillConflict {
+  return isRecord(value) && typeof value.path === 'string' && typeof value.reason === 'string'
+}
+
+function isSkillConflictArray(value: unknown): value is SkillConflict[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item: unknown) => {
+      return isSkillConflict(item)
+    })
+  )
+}
+
+function isNodeError(error: unknown, code: string) {
+  return error instanceof Error && 'code' in error && error.code === code
+}
+
+function createSkillDeployConflictError(conflicts: SkillConflict[]) {
+  const error = new Error('skill deployment conflicts detected')
+  error.name = 'SkillDeployConflictError'
+  return Object.assign(error, { conflicts })
+}
+
+export function isSkillDeployConflictError(error: unknown): error is SkillDeployConflict {
+  return (
+    error instanceof Error &&
+    error.name === 'SkillDeployConflictError' &&
+    'conflicts' in error &&
+    isSkillConflictArray(error.conflicts)
+  )
+}
+
+async function exists(path: string) {
   try {
     await lstat(path)
     return true
-  } catch (error) {
-    if (error?.code === 'ENOENT') return false
+  } catch (error: unknown) {
+    if (isNodeError(error, 'ENOENT')) return false
     throw error
   }
 }
 
-async function signature(path) {
+async function signature(path: string) {
   const stat = await lstat(path)
   if (stat.isDirectory()) return 'dir'
-  if (stat.isSymbolicLink()) return 'link:' + await readlink(path)
+  if (stat.isSymbolicLink()) return 'link:' + (await readlink(path))
   if (stat.isFile()) {
-    const hash = createHash('sha256').update(await readFile(path)).digest('hex')
+    const hash = createHash('sha256')
+      .update(await readFile(path))
+      .digest('hex')
     return 'file:' + hash
   }
   throw new Error(`unsupported skill artifact: ${path}`)
 }
 
-async function snapshotPath(path, rel, out) {
+async function snapshotPath(path: string, rel: string, out: Record<string, string>) {
   out[rel] = await signature(path)
   const stat = await lstat(path)
   if (!stat.isDirectory()) return
 
-  const entries = await readdir(path, { withFileTypes: true })
-  entries.sort((a, b) => a.name.localeCompare(b.name))
+  const entries: Dirent[] = await readdir(path, { withFileTypes: true })
+  entries.sort((a, b) => {
+    return a.name.localeCompare(b.name)
+  })
   for (const entry of entries) {
     await snapshotPath(join(path, entry.name), join(rel, entry.name), out)
   }
 }
 
-async function snapshotEntries(root, names) {
-  const out = {}
+async function snapshotEntries(root: string, names: Iterable<string>) {
+  const out: Record<string, string> = {}
   for (const name of [...names].sort()) {
     const path = join(root, name)
     if (await exists(path)) await snapshotPath(path, name, out)
@@ -63,9 +145,9 @@ async function snapshotEntries(root, names) {
   return out
 }
 
-async function topLevelSkillEntries(root) {
-  const names = []
-  const entries = await readdir(root, { withFileTypes: true })
+async function topLevelSkillEntries(root: string) {
+  const names: string[] = []
+  const entries: Dirent[] = await readdir(root, { withFileTypes: true })
   for (const entry of entries) {
     if (!entry.isDirectory()) continue
     if (await exists(join(root, entry.name, 'SKILL.md'))) {
@@ -75,33 +157,41 @@ async function topLevelSkillEntries(root) {
   return names.sort()
 }
 
-async function readManifest(path) {
+async function readManifest(path: string) {
   try {
-    const parsed = JSON.parse(await readFile(path, 'utf8'))
+    const parsed: unknown = JSON.parse(await readFile(path, 'utf8'))
     if (
-      parsed?.version !== 1 ||
-      !Array.isArray(parsed.entries) ||
-      typeof parsed.paths !== 'object' ||
-      parsed.paths === null
+      !isRecord(parsed) ||
+      parsed.version !== 1 ||
+      !isStringArray(parsed.entries) ||
+      !isStringRecord(parsed.paths)
     ) {
       throw new Error(`invalid skill deploy manifest: ${path}`)
     }
-    return parsed
-  } catch (error) {
-    if (error?.code === 'ENOENT') {
-      return { version: 1, entries: [], paths: {} }
+    return {
+      version: 1,
+      entries: parsed.entries,
+      paths: parsed.paths,
+    } satisfies SkillManifest
+  } catch (error: unknown) {
+    if (isNodeError(error, 'ENOENT')) {
+      return {
+        version: 1,
+        entries: [],
+        paths: {},
+      } satisfies SkillManifest
     }
     throw error
   }
 }
 
-function detectConflicts(source, target, previous) {
-  const conflicts = []
-  const paths = new Set([
-    ...Object.keys(source),
-    ...Object.keys(target),
-    ...Object.keys(previous),
-  ])
+function detectConflicts(
+  source: Record<string, string>,
+  target: Record<string, string>,
+  previous: Record<string, string>,
+) {
+  const conflicts: SkillConflict[] = []
+  const paths = new Set([...Object.keys(source), ...Object.keys(target), ...Object.keys(previous)])
 
   for (const path of [...paths].sort()) {
     const src = source[path]
@@ -114,9 +204,10 @@ function detectConflicts(source, target, previous) {
 
     conflicts.push({
       path,
-      reason: prev === undefined && src === undefined
-        ? 'managed skill directory contains an unmanaged artifact'
-        : 'installed snapshot was modified outside deploy',
+      reason:
+        prev === undefined && src === undefined
+          ? 'managed skill directory contains an unmanaged artifact'
+          : 'installed snapshot was modified outside deploy',
     })
   }
 
@@ -127,7 +218,7 @@ export async function inspectSkillsSnapshot({
   sourceDir,
   targetDir,
   manifestPath,
-}) {
+}: SnapshotOptions) {
   const currentEntries = await topLevelSkillEntries(sourceDir)
   const previous = await readManifest(manifestPath)
   const managedEntries = new Set([...currentEntries, ...previous.entries])
@@ -149,17 +240,19 @@ export async function deploySkillsSnapshot({
   manifestPath,
   force = false,
   check = false,
-}) {
+}: DeploySnapshotOptions) {
   const state = await inspectSkillsSnapshot({ sourceDir, targetDir, manifestPath })
 
   if (state.conflicts.length > 0 && !force) {
-    throw new SkillDeployConflictError(state.conflicts)
+    throw createSkillDeployConflictError(state.conflicts)
   }
   if (check) return state
 
   const parent = dirname(targetDir)
   const currentEntries = new Set(state.currentEntries)
-  const removedEntries = state.previous.entries.filter((name) => !currentEntries.has(name))
+  const removedEntries = state.previous.entries.filter((name) => {
+    return !currentEntries.has(name)
+  })
 
   await mkdir(parent, { recursive: true })
   if (await exists(targetDir)) {
@@ -187,19 +280,26 @@ export async function deploySkillsSnapshot({
     await rm(join(targetDir, name), { recursive: true, force: true })
   }
 
-  await writeFile(manifestPath, JSON.stringify({
-    version: 1,
-    entries: state.currentEntries,
-    paths: state.source,
-  }, null, 2) + '\n')
+  await writeFile(
+    manifestPath,
+    JSON.stringify(
+      {
+        version: 1,
+        entries: state.currentEntries,
+        paths: state.source,
+      },
+      null,
+      2,
+    ) + '\n',
+  )
 
   return state
 }
 
-async function sameTree(a, b) {
-  if (!await exists(a) || !await exists(b)) return false
-  const left = {}
-  const right = {}
+async function sameTree(a: string, b: string) {
+  if (!(await exists(a)) || !(await exists(b))) return false
+  const left: Record<string, string> = {}
+  const right: Record<string, string> = {}
   await snapshotPath(a, '.', left)
   await snapshotPath(b, '.', right)
 
@@ -207,17 +307,19 @@ async function sameTree(a, b) {
   const rightEntries = Object.entries(right)
   if (leftEntries.length !== rightEntries.length) return false
 
-  return leftEntries.every(([path, value]) => right[path] === value)
+  return leftEntries.every(([path, value]) => {
+    return right[path] === value
+  })
 }
 
-async function pointsTo(linkPath, expectedPath) {
+async function pointsTo(linkPath: string, expectedPath: string) {
   const stat = await lstat(linkPath)
   if (!stat.isSymbolicLink()) return false
   const target = await readlink(linkPath)
   return resolve(dirname(linkPath), target) === resolve(expectedPath)
 }
 
-async function skillNames(canonicalDir) {
+async function skillNames(canonicalDir: string) {
   return topLevelSkillEntries(canonicalDir)
 }
 
@@ -228,9 +330,9 @@ export async function reconcileRuntimeSkills({
   force = false,
   replaceRealEntries = false,
   check = false,
-}) {
-  const conflicts = []
-  const changes = []
+}: ReconcileRuntimeOptions) {
+  const conflicts: SkillConflict[] = []
+  const changes: RuntimeChange[] = []
   const names = await skillNames(canonicalDir)
 
   if (await exists(runtimeSkillsDir)) {
@@ -248,7 +350,7 @@ export async function reconcileRuntimeSkills({
     const expected = join(canonicalDir, name)
     const actual = join(runtimeSkillsDir, name)
 
-    if (!await exists(actual)) {
+    if (!(await exists(actual))) {
       if (mode === 'symlink') {
         changes.push({ path: actual, action: 'create-symlink' })
         if (!check) await symlink(expected, actual, 'dir')
@@ -265,7 +367,10 @@ export async function reconcileRuntimeSkills({
         continue
       }
 
-      changes.push({ path: actual, action: mode === 'symlink' ? 'replace-symlink' : 'remove-legacy' })
+      changes.push({
+        path: actual,
+        action: mode === 'symlink' ? 'replace-symlink' : 'remove-legacy',
+      })
       if (!check) {
         await rm(actual, { force: true })
         if (mode === 'symlink') await symlink(expected, actual, 'dir')
@@ -275,11 +380,17 @@ export async function reconcileRuntimeSkills({
 
     const identical = await sameTree(actual, expected)
     if (!identical && !replaceRealEntries && !force) {
-      conflicts.push({ path: actual, reason: 'legacy runtime skill differs from canonical snapshot' })
+      conflicts.push({
+        path: actual,
+        reason: 'legacy runtime skill differs from canonical snapshot',
+      })
       continue
     }
 
-    changes.push({ path: actual, action: mode === 'symlink' ? 'replace-with-symlink' : 'remove-legacy' })
+    changes.push({
+      path: actual,
+      action: mode === 'symlink' ? 'replace-with-symlink' : 'remove-legacy',
+    })
     if (!check) {
       await rm(actual, { recursive: true, force: true })
       if (mode === 'symlink') await symlink(expected, actual, 'dir')
@@ -287,27 +398,29 @@ export async function reconcileRuntimeSkills({
   }
 
   if (conflicts.length > 0 && !force) {
-    throw new SkillDeployConflictError(conflicts)
+    throw createSkillDeployConflictError(conflicts)
   }
 
   return { conflicts, changes }
 }
 
-
-async function listFiles(dir, { includeSymlinks = true } = {}) {
-  const out = []
-  let entries
+async function listFiles(
+  dir: string,
+  { includeSymlinks = true }: { includeSymlinks?: boolean } = {},
+) {
+  const out: string[] = []
+  let entries: Dirent[]
   try {
     entries = await readdir(dir, { withFileTypes: true })
-  } catch (error) {
-    if (error?.code === 'ENOENT') return out
+  } catch (error: unknown) {
+    if (isNodeError(error, 'ENOENT')) return out
     throw error
   }
 
   for (const entry of entries) {
     const path = join(dir, entry.name)
     if (entry.isDirectory()) {
-      out.push(...await listFiles(path, { includeSymlinks }))
+      out.push(...(await listFiles(path, { includeSymlinks })))
     } else if (entry.isFile() || (includeSymlinks && entry.isSymbolicLink())) {
       out.push(path)
     }
@@ -315,24 +428,28 @@ async function listFiles(dir, { includeSymlinks = true } = {}) {
   return out
 }
 
-async function hashFile(path) {
+async function hashFile(path: string) {
   try {
-    return createHash('sha256').update(await readFile(path)).digest('hex')
+    return createHash('sha256')
+      .update(await readFile(path))
+      .digest('hex')
   } catch {
     return null
   }
 }
 
-async function readJsonObject(path) {
+async function readJsonObject(path: string) {
   try {
-    return JSON.parse(await readFile(path, 'utf8'))
-  } catch (error) {
-    if (error?.code === 'ENOENT') return {}
+    const parsed: unknown = JSON.parse(await readFile(path, 'utf8'))
+    if (!isStringRecord(parsed)) throw new Error(`invalid skill deploy manifest: ${path}`)
+    return parsed
+  } catch (error: unknown) {
+    if (isNodeError(error, 'ENOENT')) return {}
     throw error
   }
 }
 
-async function claudeLegacyEntries(sourceDir, homeDir) {
+async function claudeLegacyEntries(sourceDir: string, homeDir: string) {
   const entries = []
   for (const file of await listFiles(sourceDir)) {
     const rel = join('skills', relative(sourceDir, file))
@@ -345,11 +462,11 @@ async function claudeLegacyEntries(sourceDir, homeDir) {
   return entries
 }
 
-async function detectClaudeLegacyDrift(sourceDir, homeDir) {
+async function detectClaudeLegacyDrift(sourceDir: string, homeDir: string) {
   const manifestPath = join(homeDir, '.claude', '.deploy-manifest.json')
   const manifest = await readJsonObject(manifestPath)
   const entries = await claudeLegacyEntries(sourceDir, homeDir)
-  const drift = []
+  const drift: SkillConflict[] = []
 
   for (const entry of entries) {
     const dstHash = await hashFile(entry.dst)
@@ -373,7 +490,11 @@ async function detectClaudeLegacyDrift(sourceDir, homeDir) {
     }
   }
 
-  const sourceRels = new Set(entries.map((entry) => entry.rel))
+  const sourceRels = new Set(
+    entries.map((entry) => {
+      return entry.rel
+    }),
+  )
   const legacySkillsDir = join(homeDir, '.claude', 'skills')
 
   // Correct canonical symlinks are the post-migration state, not legacy files.
@@ -400,7 +521,7 @@ async function detectClaudeLegacyDrift(sourceDir, homeDir) {
   return drift
 }
 
-async function clearClaudeSkillManifest(homeDir) {
+async function clearClaudeSkillManifest(homeDir: string) {
   const manifestPath = join(homeDir, '.claude', '.deploy-manifest.json')
   const manifest = await readJsonObject(manifestPath)
   let changed = false
@@ -417,7 +538,7 @@ async function clearClaudeSkillManifest(homeDir) {
   }
 }
 
-function reportConflicts(title, conflicts) {
+function reportConflicts(title: string, conflicts: SkillConflict[]) {
   console.error(title)
   for (const conflict of conflicts) {
     console.error(`  ${conflict.path}: ${conflict.reason}`)
@@ -433,6 +554,12 @@ async function reconcileClaudeSkills({
   homeDir,
   force,
   check,
+}: {
+  sourceDir: string
+  canonicalDir: string
+  homeDir: string
+  force?: boolean
+  check?: boolean
 }) {
   const drift = await detectClaudeLegacyDrift(sourceDir, homeDir)
   if (drift.length > 0 && !force) {
@@ -449,8 +576,8 @@ async function reconcileClaudeSkills({
       replaceRealEntries: true,
       check,
     })
-  } catch (error) {
-    if (error instanceof SkillDeployConflictError) {
+  } catch (error: unknown) {
+    if (isSkillDeployConflictError(error)) {
       reportConflicts('claude skill migration conflict:', error.conflicts)
       return false
     }
@@ -466,7 +593,11 @@ async function reconcileClaudeSkills({
   return true
 }
 
-async function reconcileNativeRuntimeSkills(canonicalDir, homeDir, runtime) {
+async function reconcileNativeRuntimeSkills(
+  canonicalDir: string,
+  homeDir: string,
+  runtime: 'codex' | 'copilot',
+) {
   await reconcileRuntimeSkills({
     canonicalDir,
     runtimeSkillsDir: join(homeDir, `.${runtime}`, 'skills'),
@@ -483,7 +614,7 @@ export async function deployAgentSkills({
   runtimes,
   force = false,
   check = false,
-}) {
+}: DeployAgentSkillsOptions) {
   const agentsRoot = join(homeDir, '.agents')
   const canonicalDir = join(agentsRoot, 'skills')
   // Keep the legacy filename so existing installations retain their recorded snapshot.
@@ -497,8 +628,8 @@ export async function deployAgentSkills({
       force,
       check,
     })
-  } catch (error) {
-    if (error instanceof SkillDeployConflictError) {
+  } catch (error: unknown) {
+    if (isSkillDeployConflictError(error)) {
       reportConflicts(
         check ? 'agent skills drift detected:' : 'agent skills deploy conflict:',
         error.conflicts,
@@ -514,13 +645,15 @@ export async function deployAgentSkills({
 
   for (const runtime of runtimes) {
     if (runtime === 'claude') {
-      if (!await reconcileClaudeSkills({
-        sourceDir,
-        canonicalDir,
-        homeDir,
-        force,
-        check,
-      })) {
+      if (
+        !(await reconcileClaudeSkills({
+          sourceDir,
+          canonicalDir,
+          homeDir,
+          force,
+          check,
+        }))
+      ) {
         return false
       }
       continue

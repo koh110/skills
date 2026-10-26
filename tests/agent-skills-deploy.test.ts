@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import {
-  SkillDeployConflictError,
+  isSkillDeployConflictError,
   deployAgentSkills,
   deploySkillsSnapshot,
   reconcileRuntimeSkills,
-} from '../lib/agent-skills.mjs'
+} from '../lib/agent-skills.ts'
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'skills-agent-deploy-'))
@@ -23,7 +23,9 @@ async function fixture() {
 
 test('snapshot deploy preserves unrelated skills and accepts source updates', async (t) => {
   const f = await fixture()
-  t.after(() => rm(f.root, { recursive: true, force: true }))
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
 
   await mkdir(join(f.targetDir, 'third-party'), { recursive: true })
   await writeFile(join(f.targetDir, 'third-party', 'SKILL.md'), '# keep\n')
@@ -31,7 +33,9 @@ test('snapshot deploy preserves unrelated skills and accepts source updates', as
   await deploySkillsSnapshot(f)
   assert.equal(await readFile(join(f.targetDir, 'example', 'SKILL.md'), 'utf8'), '# v1\n')
   assert.equal(await readFile(join(f.targetDir, 'third-party', 'SKILL.md'), 'utf8'), '# keep\n')
-  await assert.rejects(() => lstat(join(f.targetDir, 'README.md')), /ENOENT/)
+  await assert.rejects(() => {
+    return lstat(join(f.targetDir, 'README.md'))
+  }, /ENOENT/)
 
   await writeFile(join(f.sourceDir, 'example', 'SKILL.md'), '# v2\n')
   await deploySkillsSnapshot(f)
@@ -41,15 +45,21 @@ test('snapshot deploy preserves unrelated skills and accepts source updates', as
 
 test('snapshot deploy fails closed on installed edits unless forced', async (t) => {
   const f = await fixture()
-  t.after(() => rm(f.root, { recursive: true, force: true }))
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
 
   await deploySkillsSnapshot(f)
   await writeFile(join(f.targetDir, 'example', 'SKILL.md'), '# local edit\n')
   await writeFile(join(f.sourceDir, 'example', 'SKILL.md'), '# v2\n')
 
   await assert.rejects(
-    () => deploySkillsSnapshot(f),
-    (error) => error instanceof SkillDeployConflictError
+    () => {
+      return deploySkillsSnapshot(f)
+    },
+    (error) => {
+      return isSkillDeployConflictError(error)
+    },
   )
   assert.equal(await readFile(join(f.targetDir, 'example', 'SKILL.md'), 'utf8'), '# local edit\n')
 
@@ -59,7 +69,9 @@ test('snapshot deploy fails closed on installed edits unless forced', async (t) 
 
 test('runtime cleanup removes managed legacy copy and preserves unrelated skill', async (t) => {
   const f = await fixture()
-  t.after(() => rm(f.root, { recursive: true, force: true }))
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
   await deploySkillsSnapshot(f)
 
   const runtimeSkillsDir = join(f.root, '.codex', 'skills')
@@ -75,13 +87,17 @@ test('runtime cleanup removes managed legacy copy and preserves unrelated skill'
     replaceRealEntries: true,
   })
 
-  await assert.rejects(() => lstat(join(runtimeSkillsDir, 'example')), /ENOENT/)
+  await assert.rejects(() => {
+    return lstat(join(runtimeSkillsDir, 'example'))
+  }, /ENOENT/)
   assert.equal(await readFile(join(runtimeSkillsDir, 'other', 'SKILL.md'), 'utf8'), '# keep\n')
 })
 
 test('Claude migration replaces managed copy with symlink to canonical snapshot', async (t) => {
   const f = await fixture()
-  t.after(() => rm(f.root, { recursive: true, force: true }))
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
   await deploySkillsSnapshot(f)
 
   const runtimeSkillsDir = join(f.root, '.claude', 'skills')
@@ -102,10 +118,11 @@ test('Claude migration replaces managed copy with symlink to canonical snapshot'
   )
 })
 
-
 test('remove mode does not create an empty legacy runtime directory', async (t) => {
   const f = await fixture()
-  t.after(() => rm(f.root, { recursive: true, force: true }))
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
   await deploySkillsSnapshot(f)
 
   const runtimeSkillsDir = join(f.root, '.copilot', 'skills')
@@ -116,13 +133,16 @@ test('remove mode does not create an empty legacy runtime directory', async (t) 
     replaceRealEntries: true,
   })
 
-  await assert.rejects(() => lstat(runtimeSkillsDir), /ENOENT/)
+  await assert.rejects(() => {
+    return lstat(runtimeSkillsDir)
+  }, /ENOENT/)
 })
-
 
 test('high-level deploy is idempotent for Claude compatibility symlinks', async (t) => {
   const f = await fixture()
-  t.after(() => rm(f.root, { recursive: true, force: true }))
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
 
   const first = await deployAgentSkills({
     sourceDir: f.sourceDir,

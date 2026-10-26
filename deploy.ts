@@ -4,13 +4,13 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { deployAgentSkills } from './lib/agent-skills.mjs'
+import { deployAgentSkills, type AgentRuntime } from './lib/agent-skills.ts'
 
 const usage = `Usage:
-  node deploy.mjs --all [--force]
-  node deploy.mjs --claude [--check] [--force]
-  node deploy.mjs --codex [--force]
-  node deploy.mjs --copilot [--force]
+  node --experimental-strip-types deploy.ts --all [--force]
+  node --experimental-strip-types deploy.ts --claude [--check] [--force]
+  node --experimental-strip-types deploy.ts --codex [--force]
+  node --experimental-strip-types deploy.ts --copilot [--force]
 
 Options:
   --all       Deploy to Claude Code, Codex, and Copilot
@@ -22,21 +22,27 @@ Options:
   --help      Show this help
 `
 
-function parseCliArgs(argv) {
+function parseCliArgs(argv: string[]) {
+  const options = {
+    all: { type: 'boolean', default: false },
+    claude: { type: 'boolean', default: false },
+    codex: { type: 'boolean', default: false },
+    copilot: { type: 'boolean', default: false },
+    check: { type: 'boolean', default: false },
+    force: { type: 'boolean', default: false },
+    help: { type: 'boolean', short: 'h', default: false },
+  } as const
+
   return parseArgs({
     args: argv,
-    options: {
-      all: { type: 'boolean', default: false },
-      claude: { type: 'boolean', default: false },
-      codex: { type: 'boolean', default: false },
-      copilot: { type: 'boolean', default: false },
-      check: { type: 'boolean', default: false },
-      force: { type: 'boolean', default: false },
-      help: { type: 'boolean', short: 'h', default: false },
-    },
+    options,
     allowPositionals: false,
     strict: true,
   })
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 async function main() {
@@ -44,7 +50,7 @@ async function main() {
   try {
     parsed = parseCliArgs(process.argv.slice(2))
   } catch (error) {
-    console.error(error.message)
+    console.error(errorMessage(error))
     console.error(usage)
     process.exitCode = 2
     return
@@ -63,13 +69,14 @@ async function main() {
     return
   }
 
-  const runtimes = values.all
-    ? ['copilot', 'claude', 'codex']
-    : [
-        values.copilot && 'copilot',
-        values.claude && 'claude',
-        values.codex && 'codex',
-      ].filter(Boolean)
+  const runtimes: AgentRuntime[] = []
+  if (values.all) {
+    runtimes.push('copilot', 'claude', 'codex')
+  } else {
+    if (values.copilot) runtimes.push('copilot')
+    if (values.claude) runtimes.push('claude')
+    if (values.codex) runtimes.push('codex')
+  }
 
   if (runtimes.length === 0) {
     console.error('Select --all or at least one runtime')
@@ -89,7 +96,7 @@ async function main() {
   if (!ok) process.exitCode = 1
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error(error)
   process.exitCode = 1
 })
