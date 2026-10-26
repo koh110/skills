@@ -39,9 +39,8 @@ skills/
     profiles/       # 任意
     adapters/       # 任意
     references/     # 任意
-    scripts/        # 任意
+    scripts/        # 任意（portable CLI・補助script・wrapper）
 lib/                # 配布実装
-bin/                # Skill collection に属する CLI wrapper
 ```
 
 Skill の形式には [Agent Skills](https://agentskills.io/) の `SKILL.md` を使います。各 package は他の Skill やこの README に依存せず、単独で利用できる形に保ちます。
