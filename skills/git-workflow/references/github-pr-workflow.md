@@ -451,7 +451,7 @@ When setting up recurring automation for PR maintenance (for example, nightly ch
 2. Confirm `gh auth status` and git availability at the start of each run.
 3. Only modify head branches where the authenticated user has push rights. Never push to, rebase, or merge the base branch.
 4. If rewriting history, use `git push --force-with-lease` and only to the PR head branch.
-5. If a conflict cannot be resolved confidently, or auth/permissions/test setup are unexpected, stop for that PR, leave a concise PR comment, and include the reason in the final cron report.
+5. If a conflict cannot be resolved confidently, or auth/permissions/test setup are unexpected, stop for that PR and include the reason in the final cron report. Do not post a PR comment by default; post one only when the active task explicitly authorizes comments and does not prohibit them.
 6. Keep temporary checkouts, logs, downloads, and generated intermediates under a temporary directory. Put only artifacts intended for later human resumption in the repository's designated artifact directory. For parallel development, use the parent skill's `.worktree/` procedure and do not work in the root checkout.
 7. If `gh`/git are configured for SSH and cloning fails with `Permission denied (publickey)` despite valid `gh auth status`, use an approved HTTPS credential helper or the repository's documented transport fallback. Do not embed tokens in remote URLs, shell history, logs, or committed files; keep the configured `origin` unchanged unless explicitly requested.
 8. Cron jobs should report: checked PR count, conflict target count, successful PR URLs + verification, skipped/failed PR URLs + reasons, and important error excerpts.
