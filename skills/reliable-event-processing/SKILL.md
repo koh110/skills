@@ -1,6 +1,6 @@
 ---
 name: reliable-event-processing
-description: Queue、broker、worker、outbox、retry、DLQ、provider batch、consumer callbackを使う信頼性の高い非同期event/batch workflowを設計・review・migrationするときに使う。delivery guarantee、producer execution boundary、idempotency、transactionality、relay recovery、event-driven realtime、durable resumeやusage limitを伴う大規模LLM inferenceも対象とする。
+description: Queue、broker、worker、outbox、retry、DLQ、provider batch、consumer callbackを使う信頼性の高い非同期event/batch workflowを設計・review・migrationするときに使う。delivery guarantee、producer execution boundary、idempotency、transactionality、relay recovery、event-driven realtime、durable resumeやusage limitを伴う大規模LLM inference、既読状態で通知・調査を起こすpolling型change detectionも対象とする。
 license: MIT
 ---
 
@@ -21,6 +21,8 @@ database mutationによって最終的にexternal asynchronous effectを発生�
 大量LLM Map/Reduce、repository analysis、model tiering、provider batch API、content-addressed result reuse、subscription/API usage limitの分類については `references/llm-batch-inference.md` を参照してください。
 
 synchronous DB + external APIのfailure matrixとdurable convergence要件については `references/synchronous-db-external-api-consistency.md` を参照してください。
+
+外部APIをpollingし、既読状態で新しい事象を判定して通知・自動調査するchange detectionについては `references/polling-change-detection.md` を参照してください。既読化とside effectの順序、初回baselineの永続化、再実行IDの扱いを確認します。
 
 ## 必須workflow
 
