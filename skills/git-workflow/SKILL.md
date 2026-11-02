@@ -15,7 +15,7 @@ description: 'Git repositoryとGitHub deliveryでcontext確認、branch/worktree
 
 # Git Workflow
 
-このskillはGit操作そのもののportableな安全contractを定義します。GitHubのIssue/Project/PR deliveryが関係する場合は、同じpackage内の`references/github-pr-workflow.md`を追加で読みます。GitHub lifecycleを別のtop-level skillへ分割せず、Gitのlocal mechanicsとremote deliveryを一つのworkflow packageとして扱います。
+このskillはGit操作そのもののportableな安全contractを定義します。GitHubのIssue/Project/PR deliveryが関係する場合は、同じpackage内の`references/github-pr-workflow.md`を追加で読みます。PR/Issueのtitle・body/commentのfile-based作成・更新・read-backも同referenceで扱い、body hygieneを別のtop-level skillへ分割しません。GitHub lifecycleを別のtop-level skillへ分割せず、Gitのlocal mechanicsとremote deliveryを一つのworkflow packageとして扱います。
 
 次の設定は、このskillが全repositoryに一律で固定するものではなく、repository/user policyまたはruntime adapterで決めます。
 

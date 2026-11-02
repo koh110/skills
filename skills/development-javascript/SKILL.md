@@ -26,6 +26,7 @@ node <このskillのdirectory>/scripts/check.ts [files...]
 
 ## Date Handling
 
+- API timestamp validationでは`Date.parse()`が有限値を返すことだけを受け入れ条件にしない。非標準入力はruntime依存で解釈され、`2026-02-30`のような不正なcalendar dateが別の日付へ正規化される場合がある。side effect前に期待するformat、calendar date/time fields（うるう年を含む）、timezoneを検証し、read-backにも同じstrict parserを使う。期待するformatやtimezone規則は既存API契約に合わせ、推測しない
 - DBカラムが timezone-naive(`::timestamp`)か timezone-aware(`::timestamptz`)かによって、渡す文字列の形式を変える
   - **timezone-naive(`::timestamp`)**: `new Date(v).toISOString()` によるUTC文字列（`Z` 付き）をそのまま渡さない。`::timestamp` は `Z` を無視して数値部分だけをそのまま格納するため、UTC文字列を渡すとJSTセッションでは時刻が09:00ずれる。プロジェクトで採用している日付ライブラリ（dayjs等）でtimezone情報を含まない明示フォーマット文字列を生成して渡す
   - **timezone-aware(`::timestamptz`)**: 逆に timezone情報を落とした文字列を渡さない。オフセットのない文字列を渡すとDB側がセッションタイムゾーンとして解釈し、絶対時刻がずれて格納される。`new Date(v).toISOString()` のようなtimezone情報を含む文字列(またはoffset付き文字列)を渡す
