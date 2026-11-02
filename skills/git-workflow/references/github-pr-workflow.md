@@ -59,20 +59,17 @@ Issue/Project起点では、本文・acceptance criteria・現在のthread・rep
 - When editing an existing PR body, preserve the selected language unless the target PR intentionally uses another language.
 - Treat this as part of PR quality, not an optional style preference.
 
-### PR body reset rule
+### PR body reset and safe-update rule
 
-When the user asks to "adjust the PR body" or "start over from the beginning," do **not** try to incrementally patch the old body in place.
+PR/Issue titles, bodies, and comments are remote writes. Apply the repository/user authorization policy before changing them.
 
-Instead:
-1. Read the current PR body only as context.
-2. Rewrite the entire body from scratch with a clean structure.
-3. Use a temporary file plus `--body-file` when editing with `gh pr edit` to avoid shell-quoting problems from backticks, Markdown, and code fences.
-4. Re-fetch the PR body afterward to confirm the update landed exactly as intended.
-5. If a PR body is likely to contain code, backticks, or long Markdown sections, default to the file-based path even when inline editing would fit.
+- Use a temporary file with `--body-file` for body text; do not embed multiline Markdown, backticks, code fences, or shell-sensitive content in an inline `--body` argument.
+- Before editing an existing body, read and save its exact current text and `updatedAt`. By default, change only the requested section and preserve all unrelated content, including `<details>` blocks and automation-managed text. Rewrite the whole body only when the user explicitly asks for a full rewrite or to start over.
+- Immediately before writing, read the body and `updatedAt` again. `updatedAt` can change for non-body activity, so compare the body bytes with the saved snapshot: if the body changed, reconcile it or stop; if only `updatedAt` changed, rebuild from the latest snapshot and recheck. Wait for known automation updates to settle. This is optimistic conflict detection, not an atomic compare-and-set, so serialize writers when concurrent edits are possible.
+- After writing, fetch the remote body again and compare it byte-for-byte with the intended file (for JSON API output, use `jq -j` so a formatter-added newline does not alter the comparison). Also read back the object URL and state. For comments, retain the created comment URL/ID and read back its exact body.
+- Apply the same file-based and read-back rules to Issue bodies and comments.
 
 See [`pr-body-reset.md`](pr-body-reset.md) for the reusable command pattern.
-
-This avoids drift, stale wording, and accidental shell parsing errors.
 
 ### Base branch existence check
 
@@ -131,16 +128,22 @@ If `gh pr create` reports missing head/base SHAs or says there are no commits, o
 **With gh:**
 
 ```bash
+body_file=$(mktemp)
+trap 'rm -f "$body_file"' EXIT
+cat >"$body_file" <<'BODY'
+## Summary
+- <verified change summary>
+
+## Verification
+- <commands actually run and measured result>
+BODY
+
 gh pr create \
-  --title "feat: add JWT-based user authentication" \
-  --body "## Summary
-- Adds login and register API endpoints
-- JWT token generation and validation
-
-## Test Plan
-- [ ] Unit tests pass
-
-Closes #42"
+  --repo <owner>/<repo> \
+  --base <resolved-base> \
+  --head <branch> \
+  --title "docs: <short summary>" \
+  --body-file "$body_file"
 ```
 
 Options: `--draft`, `--reviewer user1,user2`, `--label "enhancement"`, `--base develop`
