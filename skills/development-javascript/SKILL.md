@@ -98,6 +98,11 @@ RUN npm install --min-release-age=7
 - TypeScriptファイルを直接実行する場合はNode.jsのstrip-typesを利用する
   - `ts-node`, `tsx` の利用を禁じる
   - ref: https://nodejs.org/docs/api/typescript.html
+- TypeScriptが明示された機能変更では、CLIだけでなく機能固有の新規runtime helper・client/config・fake-client testも`.ts`にそろえる。`tsconfig`とtest discovery/package scriptに含め、JavaScriptのまま残る機能実装を作らない
+- 無関係な既存JavaScriptは暗黙に全面移行せず、残す境界を明示する。JavaScript callerのimportを変える場合は、Node strip-typesによる実行互換性も検証する
+- 既存の `.mjs` 実行entrypointを `.ts` へ移す場合は、`package.json` の実行・syntax-check script、`tsconfig` の対象、test discovery、READMEやcron/deployの起動参照を同じ変更で更新し、旧entrypoint参照を検出する回帰testを追加する
+- JavaScriptからTypeScriptへの移行では、型guardの厳格化が旧実装で許容していた入力（特に`null`・未指定値・空値）を拒否しないか、既存validatorと呼出先の挙動を照合する。意図した契約変更でない限り同じruntime effectへ正規化し、境界値をoffline regression testで固定する
+- 外部APIを呼ぶcollectorの移行確認では、明示承認なしに実APIを実行せず、型検査とfake-client/unit testsを使う。実APIでの確認が必要なら別の承認ゲートとして扱う
 
 ## Node.js CLI Tool Guidelines
 

@@ -266,7 +266,7 @@ function verify(repo: string, policyPath: string, manifestPath: string, baseOver
 
   let changed: string[] = []
   try {
-    const tracked = git(['diff', '--name-only', base], repo).split('\n').filter(Boolean)
+    const tracked = git(['diff', '--no-renames', '--name-only', base], repo).split('\n').filter(Boolean)
     const untracked = git(['ls-files', '--others', '--exclude-standard'], repo)
       .split('\n')
       .filter(Boolean)
