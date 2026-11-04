@@ -142,6 +142,7 @@ confirmed defectは、可能ならRED→GREENで最小修正する。false posit
 レビューを探索的lintループにしない。初回レビュー前に、次のReview Charterを固定する:
 
 - ユーザーの目的とcanonical acceptance criteria
+- 受入条件の根拠はユーザー要求またはcanonical issueから特定する。実装handoff、変更後docs、testは具体化・検証には使えるが、それだけで要求を拡張しない。これらを受入条件に使うなら上位根拠を示し、例外/out-of-scopeも確認する。reviewerがこの境界を越えた指摘は`invalid`または`unstated-assumption`として扱い、その指摘だけを理由に実装scopeを広げない。
 - 変更してよいファイルのallowlist
 - 明示的なout-of-scope
 - Blocking/Major/Minor/Suggestionの採否方針
