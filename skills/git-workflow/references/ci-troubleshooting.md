@@ -58,6 +58,23 @@ error: would reformat src/utils.py
 
 ---
 
+### Secret-Scanning Failures
+
+**Diagnosis:**
+1. Confirm the failed run's exact head SHA and matched file/line. Secret scanners often mask the matched value in logs; redaction proves a rule matched, not that a live credential was exposed.
+2. Inspect the exact checked-out tree and trace how the value is used. Distinguish an actual credential from a deliberately synthetic test fixture.
+3. If the pull-request workflow tests a synthetic merge commit, verify the command and configuration from that merged tree. A head-only checkout may not contain base-branch scanner configuration or scripts.
+
+**Common fixes:**
+- When a test needs a token-shaped fake, construct it at runtime from fragments or repeated characters, and keep tests that prove its shape and redaction behavior.
+- Keep the scanner enabled. Do not add broad fixture-path ignores or weaken scanner rules to suppress a false positive; use a narrow exception only when repository policy explicitly permits it.
+
+**Local verification:**
+- Run the exact CI scanner command from an isolated PR worktree/checkout that matches the CI tree.
+- Before running a repository-wide glob such as `**/*` from a primary checkout, check whether `.worktree/` contains sibling worktrees. Some scanners include those local files and produce unrelated findings; isolate the run rather than converting local contamination into a committed ignore rule.
+
+---
+
 ### Type Check Failures (mypy / pyright)
 
 **Signatures in logs:**
