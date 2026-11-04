@@ -116,6 +116,49 @@ test('明示された既存target branchをbaseに使う', () => {
   })
 })
 
+test('renameを伴う移行では変更元と変更先を検証pathに含める', () => {
+  git('mv', 'skills.md', 'renamed.md')
+  const policy = join(metadata, 'policy.json')
+  const manifestPath = join(metadata, 'manifest.json')
+  writeFileSync(
+    policy,
+    JSON.stringify({
+      version: 1,
+      repository: 'example-owner/example-repository',
+      defaultBranch: 'main',
+      allowedRepositories: ['example-owner/example-repository'],
+    }),
+  )
+  writeFileSync(
+    manifestPath,
+    JSON.stringify(manifest([target('skills.md', 'patch'), target('renamed.md', 'create')])),
+  )
+
+  const result = verify(repo, policy, manifestPath)
+  assert.equal(result.ok, true, JSON.stringify(result))
+  assert.deepEqual(result.changed, ['renamed.md', 'skills.md'])
+})
+
+test('renameの削除元をmanifestから省くと拒否する', () => {
+  git('mv', 'skills.md', 'renamed.md')
+  const policy = join(metadata, 'policy.json')
+  const manifestPath = join(metadata, 'manifest.json')
+  writeFileSync(
+    policy,
+    JSON.stringify({
+      version: 1,
+      repository: 'example-owner/example-repository',
+      defaultBranch: 'main',
+      allowedRepositories: ['example-owner/example-repository'],
+    }),
+  )
+  writeFileSync(manifestPath, JSON.stringify(manifest([target('renamed.md', 'create')])))
+
+  const result = verify(repo, policy, manifestPath)
+  assert.equal(result.ok, false)
+  assert.ok(result.errors.includes('changed path is outside manifest scope: skills.md'))
+})
+
 test('既存artifactをcreate扱いした場合は拒否する', () => {
   writeFileSync(join(repo, 'skills.md'), 'changed\n')
   git('add', '.')

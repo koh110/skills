@@ -46,6 +46,8 @@ PR_TARGET_BRANCH=release/1.x "$CHANGE_TARGET_GATE_BIN" verify \
 2. `discover`を実行して、target repositoryのsource of truthと既存artifactを確認する。
 3. 既存artifactがある場合は`patch`、存在しない新規責務だけ`create`とする。mirrorやinstalled copyだけをsource of truthとして扱わない。
 4. `verify`でrepository remote、policy、base、manifest、actual diffを検証する。
+   - `verify`は指定baseからcandidate全体までの変更pathを検証する。既存PRの更新では直近commitやstaged差分だけでなく、baseからPR headまでの全pathをmanifestへ含める。
+   - rename・移動・旧ファイル削除を伴う移行では、旧pathの削除を見落とさないよう`verify`はrename検出を無効にして旧pathと新pathを別々のchanged pathとして返す。両方をmanifestへ書き、baseに存在する旧pathはcandidateで削除されていても`patch`、baseに存在しない新pathは`create`とし、実際のchanged path一覧と照合する。
 5. `verify`が成功するまで、push・PR作成・外部repositoryへのfeedbackを行わない。
 6. PR作成後は、PRのowner/repository、base、head、commit SHA、changed files、stateを再確認する。
 
