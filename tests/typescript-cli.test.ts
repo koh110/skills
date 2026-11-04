@@ -9,7 +9,7 @@ import test from 'node:test'
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 function runTypeScriptCli(path: string, args: string[]) {
-  return execFileSync(process.execPath, ['--experimental-strip-types', path, ...args], {
+  return execFileSync(process.execPath, [path, ...args], {
     cwd: repositoryRoot,
     encoding: 'utf8',
   })

@@ -7,10 +7,10 @@ import { parseArgs } from 'node:util'
 import { deployAgentSkills, type AgentRuntime } from './lib/agent-skills.ts'
 
 const usage = `Usage:
-  node --experimental-strip-types deploy.ts --all [--force]
-  node --experimental-strip-types deploy.ts --claude [--check] [--force]
-  node --experimental-strip-types deploy.ts --codex [--force]
-  node --experimental-strip-types deploy.ts --copilot [--force]
+  node deploy.ts --all [--force]
+  node deploy.ts --claude [--check] [--force]
+  node deploy.ts --codex [--force]
+  node deploy.ts --copilot [--force]
 
 Options:
   --all       Deploy to Claude Code, Codex, and Copilot

@@ -95,7 +95,8 @@ RUN npm install --min-release-age=7
   - `paths` はpackage.jsonの `exports` マップ検証をバイパスし、存在しないsubpath importがコンパイルを通って実行時の `ERR_PACKAGE_PATH_NOT_EXPORTED` で初めて発覚する
   - 代わりにProject References（参照先packageは `composite: true` と `declarationMap: true`）に一本化する
 - 可能な場合は必ず `as const` を記述する
-- TypeScriptファイルを直接実行する場合はNode.jsのstrip-typesを利用する
+- TypeScriptファイルを直接実行する場合はNode.jsのnative type strippingを利用する
+  - Node.js 22.18.0 / 23.6.0以降はデフォルト有効のため `--experimental-strip-types` フラグは付与しない（`node file.ts` で実行する）
   - `ts-node`, `tsx` の利用を禁じる
   - ref: https://nodejs.org/docs/api/typescript.html
 
