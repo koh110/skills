@@ -46,6 +46,7 @@ description: 破壊的・無人・外部ツール依存の自動化を、不確�
 - timeoutまたはoutput overflow時はterminationを段階的に強化し、`close`が来なくてもparent promiseが必ずsettleするようにする。termination未確認はhard failureとして扱い、生存childが変更できるartifactの公開・削除やisolation解放を行わない。
 - launch failure、timeout、output overflow、signal exit、non-zero exit、不正output、semantic rejectionを区別する。
 - 呼び出し側が子processのfailure kindで分岐する場合は、dedicated/documented exit codeで分類する。stderrには利用者制御の値が含まれ得るため、message textをparseして許容側へ分類してはならない。明示的に許可したfailure codeだけをrecoverableとして扱い、それ以外のnon-zero exitは失敗とする。
+- fail-closed CLIを検証するtestでは、先に構造化summaryをparseし、結果ごとに期待exit statusとsummary reason/error countをassertする。安全側のskipと検出したrejectionはstatusが異なり得るため、全結果に成功statusを一律要求しない。
 - startup banner、呼出引数、self-reportされたmodel/provider名は補助的かつuntrustedなevidenceとして扱う。identity-sensitive gateではprovider/runtime responseからauthenticated observed identityを得られない、または一致しない場合に拒否する。要求したidentityは実際に実行されたidentityの証明ではない。
 - Agent sessionの成功判定では、最後のassistant messageの終了理由を確認し、`error`/`aborted`等の終了を成功扱いしない。途中まで出力されたtextだけを成功のevidenceにしてはならない。
 
