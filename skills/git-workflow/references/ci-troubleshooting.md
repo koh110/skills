@@ -132,6 +132,15 @@ Error: Resource not accessible by integration
 - Verify secrets exist: `gh secret list` or check repo settings
 - For fork PRs: some secrets aren't available by design
 
+#### AWS OIDC token validation vs. IAM authorization
+
+When `aws-actions/configure-aws-credentials` reports `The web identity token provided could not be validated`, AWS rejected the web identity token before the action obtained role credentials. Do not treat this as interchangeable with `Not authorized to perform sts:AssumeRoleWithWebIdentity`, which points to a role authorization/trust mismatch.
+
+1. Verify the job requests `id-token: write`, the configured audience matches the IAM OIDC provider client ID, and the role trust expects the workflow's issuer and event/subject claims. Use sanitized claim metadata; never print or copy the raw JWT into logs or chat.
+2. Read the complete failed step and compare runs for the same head and other revisions. A repeated token-validation error is not evidence that application source or broader role trust is the fix; inspect the authorized AWS OIDC provider/role configuration and runner environment before changing workflow permissions or trust conditions.
+3. If those AWS settings are outside the available read-only scope, do not add long-lived credentials, broaden trust, or claim a repository fix. Report the exact failed step and sanitized error, and stop for an authorized infrastructure investigation.
+4. Rerun only when evidence supports a transient token/issuer failure; do not blindly retry a repeated validation error.
+
 ---
 
 ### Timeout Failures
@@ -168,6 +177,26 @@ The job running on runner ... has exceeded the maximum execution time
 **Verification:**
 - Rerun the exact head and verify every affected job, not just the first job edited.
 - After removing the bottleneck, inspect all newly reached steps; treat a separate failure as a new root cause and do not blindly retry it.
+
+---
+
+#### Expired Artifacts After Delayed Jobs or Reruns
+
+**Signatures in logs:**
+- An artifact download fails although the producing job previously uploaded it successfully.
+- The consumer starts after the artifact's retention window, often after a long self-hosted-runner queue or a rerun of only failed jobs.
+
+**Diagnosis:**
+1. Compare workflow run attempts and producer/consumer job timestamps; do not assume a successful dependency was rerun.
+2. Inspect artifact creation/expiration metadata when available and confirm the download step's run ID.
+3. Distinguish the stale-artifact failure from errors in later steps reached after the download succeeds.
+
+**Common fixes:**
+- Set artifact retention long enough to cover realistic queue and rerun delays, balancing storage and data sensitivity.
+- If an expired run-level artifact cannot be restored by rerunning failed jobs, start a fresh workflow run so the producer creates a fresh artifact; do not blindly repeat the same failed-job rerun.
+
+**Verification:**
+- Confirm both upload and download succeed in a fresh run, then inspect any later failure as a separate cause.
 
 ---
 
