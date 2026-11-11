@@ -166,3 +166,73 @@ test('high-level deploy is idempotent for Claude compatibility symlinks', async 
   })
   assert.equal(second, true)
 })
+
+test('Claude drift check ignores top-level entries owned by other tools', async (t) => {
+  const f = await fixture()
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
+
+  const syncedDir = join(f.root, '.claude', 'skills', 'synced', 'bucket', 'docx')
+  await mkdir(syncedDir, { recursive: true })
+  await writeFile(join(syncedDir, 'SKILL.md'), '# synced by Claude\n')
+
+  const deployed = await deployAgentSkills({
+    sourceDir: f.sourceDir,
+    homeDir: f.root,
+    runtimes: ['claude'],
+  })
+  assert.equal(deployed, true)
+
+  const result = await deployAgentSkills({
+    sourceDir: f.sourceDir,
+    homeDir: f.root,
+    runtimes: ['claude'],
+    check: true,
+  })
+  assert.equal(result, true)
+  assert.equal(await readFile(join(syncedDir, 'SKILL.md'), 'utf8'), '# synced by Claude\n')
+})
+
+test('Claude drift check still detects unmanaged files inside managed skill dirs', async (t) => {
+  const f = await fixture()
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
+
+  const legacySkill = join(f.root, '.claude', 'skills', 'example')
+  await mkdir(legacySkill, { recursive: true })
+  await writeFile(join(legacySkill, 'SKILL.md'), '# v1\n')
+  await writeFile(join(legacySkill, 'local-note.md'), '# local\n')
+
+  const result = await deployAgentSkills({
+    sourceDir: f.sourceDir,
+    homeDir: f.root,
+    runtimes: ['claude'],
+    check: true,
+  })
+  assert.equal(result, false)
+})
+
+test('Claude drift check still inspects skills recorded only in the legacy manifest', async (t) => {
+  const f = await fixture()
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
+
+  const removedSkill = join(f.root, '.claude', 'skills', 'removed')
+  await mkdir(removedSkill, { recursive: true })
+  await writeFile(join(removedSkill, 'SKILL.md'), '# edited after deploy\n')
+  await writeFile(
+    join(f.root, '.claude', '.deploy-manifest.json'),
+    JSON.stringify({ 'skills/removed/SKILL.md': 'stale-hash' }),
+  )
+
+  const result = await deployAgentSkills({
+    sourceDir: f.sourceDir,
+    homeDir: f.root,
+    runtimes: ['claude'],
+    check: true,
+  })
+  assert.equal(result, false)
+})
