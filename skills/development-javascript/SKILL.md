@@ -5,7 +5,8 @@ description: 'TRIGGER when: creating or editing .ts/.js/.mts/.mjs files, creatin
 
 ## Lint and Format (must)
 
-- `.ts` / `.js` を変更したら、完了前にprojectのroot(package.jsonのあるdirectory)で次を実行し、formatとlintを流す
+- `.ts` / `.js` を変更したら、完了前に対象projectまたはworkspaceのroot(package.jsonのあるdirectory)で次を実行し、formatとlintを流す。npm workspaces monorepoではworkspaceごとに、そのworkspaceに属する変更fileだけを`[files...]`で明示して実行する。repo root直下の変更はworkspace所有fileを除いたroot用file listを明示して、repo rootから別に確認する
+- `files...`を省略したcheck.tsはgit root全体の変更fileを集める。workspace rootでの実行はcwd外を除外するが、repo rootから再実行すると確認済みnested workspace fileも含まれ、root設定で再formatされる場合がある。workspaceごとに設定が異なる場合は、rootからの自動検出を避け、各rootにowner単位で分割したfile listを渡す
 
 ```bash
 node <このskillのdirectory>/scripts/check.ts [files...]
@@ -56,6 +57,12 @@ RUN npm install --min-release-age=7
 
 - `min-release-age-exclude` を使う場合は npm 11.17.0 以降を要求する（同設定が追加されたバージョン）
 - `omit-lockfile-registry-resolved=true` と併用する前に、npm/cli#9715 の修正が利用する npm リリースに含まれていることと、`npm ci` の回帰テストを確認する。少なくとも npm 11.19.1 / 12.2.0 では、lockfile から `resolved` が省略されると、除外対象でも `npm ci` が `ETARGET` になることを確認した。修正が未収録ならこの組み合わせを避け、`resolved` を保持する lockfile で確認する
+- 脆弱性修正では最初に`npm audit --json`のbaselineと`npm audit fix --dry-run --json`の提案・依存経路を保存する。件数削減だけを目的に`--force`を使わず、major updateは互換性とworkspace全体への影響を検証して採否を判断する
+- npm workspacesではroot overridesと各workspaceの直接依存を照合し、rootからlockfileを更新する。変更後は`npm ci --ignore-scripts`、audit、native test/build/typecheck/lintを実行し、baselineとfinalのseverity件数を分けて記録する
+- `vp migrate`などの移行toolが途中で失敗しても、manifest/config/lockfileやpackage installが先に変更された可能性がある。rollbackとみなさず、tracked/untracked差分、生成物、migration review項目を確認してから手動で検証する
+- `vp dev`やpreviewなどCLI入口を移行する場合はworkspaceごとに動的portでHTTP smokeを行う。previewの失敗は同じ引数・条件でclean baseも確認し、既存問題とregressionを区別する
+- lintのtypeCheckを無効にする場合は、独立した`tsc`/workspace typecheck gateがtestまたはCIで確実に実行されることを確認する
+- build/test後はtracked/untrackedの生成物を確認し、依存更新と無関係なartifactをcommitへ含めない
 
 ## Linked Worktree and npm Workspace Verification
 
