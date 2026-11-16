@@ -496,11 +496,23 @@ async function detectClaudeLegacyDrift(sourceDir: string, homeDir: string) {
     }),
   )
   const legacySkillsDir = join(homeDir, '.claude', 'skills')
+  // Top-level entries this repository has ever owned: current source skills and
+  // anything recorded by the previous copy-based deploy. Other top-level entries
+  // (e.g. Claude's own `synced/`) belong to someone else and are not drift.
+  const ownedTopLevel = new Set(
+    [...sourceRels, ...Object.keys(manifest)].flatMap((rel) => {
+      const [root, top] = rel.split(/[\\/]/)
+      return root === 'skills' && top ? [top] : []
+    }),
+  )
 
   // Correct canonical symlinks are the post-migration state, not legacy files.
   // Only inspect real files under old copied skill directories here.
   for (const file of await listFiles(legacySkillsDir, { includeSymlinks: false })) {
-    const rel = join('skills', relative(legacySkillsDir, file))
+    const legacyRel = relative(legacySkillsDir, file)
+    const [top] = legacyRel.split(/[\\/]/)
+    if (!top || !ownedTopLevel.has(top)) continue
+    const rel = join('skills', legacyRel)
     if (sourceRels.has(rel)) continue
 
     const currentHash = await hashFile(file)
