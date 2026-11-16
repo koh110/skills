@@ -184,6 +184,13 @@ gh pr checks
 gh pr checks --watch
 ```
 
+### PR作成直後のcheck一覧を再確認する
+
+- PRのhead SHAを `gh pr view <n> --json headRefOid --jq .headRefOid` で記録する。matrix jobの開始後に別workflow jobが追加されることがあるため、初回の一覧やpartial tableだけで「CI完了」「CIなし」と判断しない。
+- finiteな実行budgetを設けて `gh pr checks <n> --watch` を実行する。Linuxなら例として `timeout 30m gh pr checks <n> --watch` を使い、実測durationに合わせてbudgetを調整する。budget超過は未完了として扱う。
+- watch後に `gh pr checks <n> --json name,bucket,state,startedAt,completedAt,link,workflow` でjobを再列挙する。`bucket=pending` が残る場合や一覧が増えた場合は、job名を再確認してwatchを続ける。exit code 8はpendingを示すため成功扱いしない。手作業で短い間隔のpoll loopを回さない。
+- 完了と報告する前にhead SHAを再取得し、開始時と一致すること、期待するworkflow/checkが列挙され、pendingが0件であることを確認する。保存する結果はPR番号、exact head SHA、job名、bucket/state、start/end、linkの一覧とする。SHA変更またはbudget超過時はCI完了を断言しない。
+
 **With git + curl:**
 
 ```bash

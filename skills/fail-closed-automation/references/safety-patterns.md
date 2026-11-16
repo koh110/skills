@@ -27,6 +27,22 @@ lexicalなabsolute pathと`realpath()`結果へ個別に適用する。root自�
 
 一致またはidentity変化があれば拒否する。`realpath()`だけでは同じinodeを指す異なるhardlinkを検出できず、後続のancestor置換raceも防げない。platformに必要な変更primitiveがない場合、敵対的に書込み可能なfilesystemでの利用を拒否する。
 
+### Pathname-bound Node.js Unix socket cleanup
+
+Node.jsの[`net.Server.close()`](https://nodejs.org/api/net.html#serverclosecallback)は、Node.js APIが作成したpathname-bound Unix domain socketをunlinkする。ローカルの再現試験では、古いserverをcloseする前に同じpathnameへ別socketをbindすると、close callbackより前にreplacement socketが削除された。post-closeの`lstat()`だけでは防げない。
+
+normal shutdownまたはstartup-failure cleanupでは、次の順序でbound pathnameの置換entryを保護する。
+
+1. 親directoryのfilesystem identityを固定・確認し、owner-onlyのtrusted runtime directoryであることを確認する。
+2. original pathnameがlistener socket自身のidentityを指すことを確認し、同一filesystem内のcollision-resistant quarantineへ移動する。
+3. 元のbound pathnameにdirectory guardを作成してidentityを記録してから`server.close()`する。unlinkはdirectory guardを除去できない。
+4. close後、guardの現在identityが記録値と一致する場合だけguardを削除し、quarantine entryがoriginal listener socketのidentityと一致する場合だけ削除する。
+5. rollbackが必要なら、destinationが空で、記録identityが一致する場合だけ復元する。それ以外はquarantineを保持してfail closedにする。
+
+Node.jsの`fs.rename()`はoccupied destinationへのno-replaceを保証しない。quarantineには同一filesystemのrandom nameを使い、owner-only directoryとconcurrentなsame-UID writerがいない契約を明示する。この前提を保証できない場合はno-replace primitiveを使うか、cleanupを拒否する。guard/quarantine操作のいずれかを証明できない場合、置換entryを削除する可能性があるclose/cleanup経路を続けない。
+
+検証ではnormal shutdownとstartup failureの両方で、bound pathnameをregular file、directory、別socketに置換するraceを試す。replacementのinode/contentが保持され、original socketだけがidentity一致時にcleanupされること、unsafeな復元ではquarantineが残ることを確認する。また、`server.close()`後のidentity checkだけでは遅いことを示すregression testを含める。
+
 ## 3. 排他的なartifact ownership
 
 ```js

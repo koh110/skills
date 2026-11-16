@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { canonicalRepository, verify } from './change-target-gate.ts'
 
@@ -226,4 +227,17 @@ test('repository ownership mismatchを拒否する', () => {
   assert.equal(result.ok, false)
   assert.match(result.errors.join('\n'), /origin repository mismatch/)
   assert.match(result.errors.join('\n'), /not allowlisted/)
+})
+
+test('symlinkされたpackage wrapperはreal pathからCLIを実行する', () => {
+  const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  const linkedPackage = join(metadata, 'exposed-package')
+  symlinkSync(packageRoot, linkedPackage, 'dir')
+  const wrapper = join(linkedPackage, 'scripts', 'change-target-gate.sh')
+
+  const output = execFileSync('sh', [wrapper, '--help'], {
+    cwd: repo,
+    encoding: 'utf8',
+  })
+  assert.match(output, /^Usage:/)
 })
