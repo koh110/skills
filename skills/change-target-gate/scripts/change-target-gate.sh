@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec node "$script_dir/change-target-gate.ts" "$@"
+# NodeがTypeScriptのmodule URLをrealpathへ解決するため、symlink経由でも実体pathで起動する。
+script_dir=$(CDPATH= cd -P -- "$(dirname -- "$0")" && pwd -P)
+exec node --experimental-strip-types "$script_dir/change-target-gate.ts" "$@"

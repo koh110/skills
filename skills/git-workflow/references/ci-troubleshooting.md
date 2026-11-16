@@ -220,6 +220,12 @@ COPY failed: file not found in build context
 
 ---
 
+## PR作成後のCI結果を読み返す
+
+- `gh pr checks <n> --watch` を優先し、`timeout <budget> gh pr checks <n> --watch` のように有限の実行budgetを付ける。budgetはcheckの実測durationに合わせて決め、例えば `timeout 30m gh pr checks <n> --watch` とする。timeoutは未完了として扱う。watchを使えず手動で確認する場合も、実測に合わせた間隔と有限の総budgetを設け、job名・status・durationが分かる形式で記録する。短い間隔のpoll loopにしない。
+- PR作成直後は、matrix jobの開始後にbuild等のworkflow jobが追加され、check一覧自体が増えることがある。初回一覧やpartial tableだけで「CI完了」「CIなし」と判断しない。watch後にcheckを再列挙し、pending・queued・in_progressのjobが残る場合や一覧が増えた場合は完了を報告しない。JSON read-backとexit codeの扱いは `github-pr-workflow.md` の手順に従う。
+- `gh pr view <n> --json headRefOid --jq .headRefOid` で開始時と終了時のPR head SHAを取り、同じ値であることを確認する。記録にはPR番号、exact head SHA、job名、bucket/state、開始・終了時刻（およびduration）、checkへのlinkを含める。
+
 ## Auto-Fix Decision Tree
 
 ```

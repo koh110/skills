@@ -18,6 +18,7 @@ node <このskillのdirectory>/scripts/check.ts [files...]
 - code style(引用符、セミコロン、関数定義の形式、arrow functionの書き方、変数化)と、lintで検出できるルール(class、import path、forEach、`process.env`、`describe`、引数parser、`interface`、type assertion、返り値の型、`any`、filterの `is`)は文章で定義せず、skillのlint設定を正とする。対応ruleは `lint/oxlint.json` を参照
 - errorはすべて修正する。warn(`js-skill/no-single-use-variable`、`js-skill/no-filter-type-predicate`)は判断を伴うため、該当箇所を見直し、残す場合は理由を説明できる状態にする
 - disable commentでerrorを抑制してよいのは、外部ライブラリの型定義が不完全な場合など正当な理由があるときだけとし、理由をコメントに明記する
+- checkerがnonzeroで失敗した場合は、同一configuration・同一tracked-file listを使い、clean base worktreeとcandidateの双方で実行する。診断はline/columnの差を無視し、(file, rule, message)単位で比較する。candidateのuntracked fileも確認し、candidate-only diagnosticを解消する。baseとcandidateがともにnonzeroならbaseline debtとcandidate deltaを分けて報告し、lint gateをcleanとは報告しない
 - projectにvite-plusが無い場合、scriptは `npx -p vite-plus@1 vp` で取得する(`npx vp` はplaceholder packageを実行してしまうので使わない)。sandboxで `~/.npm/_npx` に書けず失敗した場合はsandbox外で再実行する
 
 ## Environment Variables
@@ -59,6 +60,15 @@ RUN npm install --min-release-age=7
 - `omit-lockfile-registry-resolved=true` と併用する前に、npm/cli#9715 の修正が利用する npm リリースに含まれていることと、`npm ci` の回帰テストを確認する。少なくとも npm 11.19.1 / 12.2.0 では、lockfile から `resolved` が省略されると、除外対象でも `npm ci` が `ETARGET` になることを確認した。修正が未収録ならこの組み合わせを避け、`resolved` を保持する lockfile で確認する
 - 脆弱性修正では最初に`npm audit --json`のbaselineと`npm audit fix --dry-run --json`の提案・依存経路を保存する。件数削減だけを目的に`--force`を使わず、major updateは互換性とworkspace全体への影響を検証して採否を判断する
 - npm workspacesではroot overridesと各workspaceの直接依存を照合し、rootからlockfileを更新する。変更後は`npm ci --ignore-scripts`、audit、native test/build/typecheck/lintを実行し、baselineとfinalのseverity件数を分けて記録する
+- npm lifecycle scriptがinstall後のpackage/dependency manifestを変更する場合は、専用worktreeでpacked artifactを一時prefixへinstallし、変更対象fieldをinstalled manifestからread-backする。`npm pack --dry-run`は含有fileの確認であり、install後の状態やlifecycle scriptの実行を証明しない。`allow-scripts`のwarningも実行有無の証拠にしない。lifecycle scriptは現在userの権限で動作し、prefixはsecurity sandboxではないため、scriptをreviewし、production credential/serviceを使わない使い捨て環境で実行する
+
+```bash
+mkdir -p "$TMPDIR/package-test" "$TMPDIR/install-prefix"
+npm pack --pack-destination "$TMPDIR/package-test"
+npm install --global --prefix "$TMPDIR/install-prefix" --offline --no-audit --no-fund "$TMPDIR/package-test/<package>.tgz"
+```
+
+`<package>.tgz`は`npm pack`が生成した実際のtarball pathに置き換える。`npm root --global --prefix "$TMPDIR/install-prefix"`でisolated install rootを確認し、対象package manifestの期待field/valueを検証する。offline installがdependency不足で失敗した場合は、production prefixを使わず、approved registry/cacheを使うisolated test環境を用意する
 - `vp migrate`などの移行toolが途中で失敗しても、manifest/config/lockfileやpackage installが先に変更された可能性がある。rollbackとみなさず、tracked/untracked差分、生成物、migration review項目を確認してから手動で検証する
 - `vp dev`やpreviewなどCLI入口を移行する場合はworkspaceごとに動的portでHTTP smokeを行う。previewの失敗は同じ引数・条件でclean baseも確認し、既存問題とregressionを区別する
 - lintのtypeCheckを無効にする場合は、独立した`tsc`/workspace typecheck gateがtestまたはCIで確実に実行されることを確認する
