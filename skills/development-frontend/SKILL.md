@@ -23,6 +23,7 @@ description: 'TRIGGER when: creating or editing .tsx/.jsx/.css/.scss files, crea
 - `container-type`はcontainmentによってintrinsic sizingや`@container`の適用範囲に影響するため、導入時はcontainer自身のサイズ計算と子要素の実効styleを確認し、例外や採用しない判断も理由と影響範囲を独立reviewのinputsへ渡す
 - 対象となる狭い幅・短い高さ・長い文言などのviewport条件を明示し、computed styleまたはDOMの実測geometryで、主要な操作対象・本文・ダイアログが重ならず到達可能であることを確認する
 - breakpointやlayout geometryに影響しないCSS変更（色、typography tokenなど）は、responsive geometry検証をN/Aとし、その理由を独立reviewのinputsへ渡す
+- 色変更が含まれる場合はresponsive geometryがN/Aでも、実ページのcomputed foreground/backgroundを通常・hover・focusで確認し、テキスト・操作要素のコントラストとfocus indicatorの視認性を評価する。themeやCSS cascadeを考慮し、source tokenだけでPASSにせず、測定値や根拠を独立reviewのinputsへ記録する
 - CSS/build pipelineがcompiled assetを生成する場合は、最終build後のassetが検証したsourceと一致することを確認する。生成物をcommitするrepositoryでは、stageと未stage差分の扱いは`git-workflow`の「Commit / Rebase / Push Guidelines」にある生成物手順に従う
 - 対象viewport条件が変更対象に存在しない場合はgeometry検証をN/Aとし、compiled assetを生成しないrepositoryではasset照合をN/Aとする。それぞれ理由を独立reviewのinputsへ渡す。CSS/レイアウト変更がある場合のcascade実効値確認はN/Aにせず、未確認をPASS扱いしない
 
