@@ -405,14 +405,16 @@ This keeps the workflow grounded in real execution without inventing local succe
 
 **Explicit approval gate:** Creating a PR, passing review, or being asked to release/deploy does not authorize merging. Do not run any merge command unless the user explicitly approves merging the named PR (for example, “PR #30をmergeして”). If the user asks only to release/deploy, keep the PR state unchanged and use the repository's approved post-merge release path only after an explicit merge approval or an already-merged commit is confirmed. After any merge mutation, re-read the PR state and report the exact merge commit.
 
+**Merge method:** Use rebase when neither the user nor repository policy names a method. Pass the method explicitly in every merge command. If rebase is unavailable or disallowed by repository policy, stop and ask; do not silently fall back to squash or a merge commit. Use squash or a merge commit only when explicitly requested.
+
 **With gh (only after explicit approval for the named PR):**
 
 ```bash
 # Re-read the exact target immediately before mutation.
 gh pr view -R <owner/repo> <number> --json url,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus
 
-# Use the approved merge method; do not infer approval from review or CI.
-gh pr merge -R <owner/repo> <number> --squash
+# Use rebase by default; if repository policy disallows it, stop and ask.
+gh pr merge -R <owner/repo> <number> --rebase
 ```
 
 `--auto` is also a merge mutation and requires the same explicit approval. Remote branch deletion and local worktree cleanup are separate operations; follow the parent skill's cleanup predicates rather than chaining them blindly.
@@ -422,13 +424,12 @@ gh pr merge -R <owner/repo> <number> --squash
 ```bash
 PR_NUMBER=<number>
 
-# Merge the PR via API (squash)
+# Merge the PR via API (rebase)
 curl -s -X PUT \
   -H "Authorization: token $GITHUB_TOKEN" \
   https://api.github.com/repos/$OWNER/$REPO/pulls/$PR_NUMBER/merge \
   -d "{
-    \"merge_method\": \"squash\",
-    \"commit_title\": \"feat: add user authentication (#$PR_NUMBER)\"
+    \"merge_method\": \"rebase\"
   }"
 
 # Remote branch deletion and local cleanup are separate, explicit operations.
@@ -450,7 +451,7 @@ PR_NODE_ID=$(curl -s \
 curl -s -X POST \
   -H "Authorization: token $GITHUB_TOKEN" \
   https://api.github.com/graphql \
-  -d "{\"query\": \"mutation { enablePullRequestAutoMerge(input: {pullRequestId: \\\"$PR_NODE_ID\\\", mergeMethod: SQUASH}) { clientMutationId } }\"}"
+  -d "{\"query\": \"mutation { enablePullRequestAutoMerge(input: {pullRequestId: \\\"$PR_NODE_ID\\\", mergeMethod: REBASE}) { clientMutationId } }\"}"
 ```
 
 ## 5. Scheduled PR Maintenance / Conflict-Rebase Automation
