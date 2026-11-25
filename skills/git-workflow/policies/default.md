@@ -13,6 +13,8 @@ source codeだけでなく、後でcommit/review対象になるdocsや設計書�
 - test/lint/build/commitは作業worktree内で行う。
 - file edit toolの`path`には専用worktreeの絶対pathを使い、root checkoutの同名pathへ誤適用しない。複数worktreeがある場合は編集前後に`git -C <worktree> rev-parse --show-toplevel`とstatusを確認する。
 - root checkoutへfeature変更を残したまま完了扱いにしない。
+- worktreeの用意は最初のfile editの前に行う。commitやPRを依頼された時点で初めてworktreeへ移す進め方にしない(root checkoutに残った差分が後続taskのstatusへ混入する)。
+- 別checkoutの状態を変える操作(`git restore`等)と作業worktreeでのcommitを1つのcommandに連結しない。片方だけ成功すると変更が失われうる。
 
 runtime/harnessが独自pathでlinked worktreeを用意した場合はpath namingよりGit metadataを優先し、既存linked worktreeをそのまま使います。
 
@@ -41,6 +43,13 @@ commitが `error: gpg failed to sign the data` で失敗し、署名keyのlock�
 - PR作成前にrepositoryのPR templateと直近の運用形式を確認する。
 - push前にtarget repositoryがpublic/privateのどちらかを確認し、公開できないcontextをpublic remoteへpushしない。
 - push/PR前にbranchと公開予定commit SHAを確認する。
+- review依頼先は、PRのrequested reviewersと対象fileのowner定義行で確認する。近いdirectoryのownerから類推しない。owner定義file自体を変更するPRでは、そのfile自身のowner行も確認する。
+- PR本文には、出典を確認できた経緯だけを書く。確認していない依頼元や背景を書かない。
+
+## Authentication failures
+
+- SSO/SAMLの認可切れやtoken失効のように、ユーザーにしか解消できない認証errorでは、同じcommandを再実行しない。再認証に必要なcommandを1回提示して停止する。
+- commit、push、PR作成が続く作業では、最初の書き込みの前に署名とremote認証が通る状態かをまとめて確認し、ユーザーへの依頼を1回にまとめる。
 
 ## Cleanup
 
