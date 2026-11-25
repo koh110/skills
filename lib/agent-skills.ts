@@ -462,7 +462,12 @@ async function claudeLegacyEntries(sourceDir: string, homeDir: string) {
   return entries
 }
 
-async function detectClaudeLegacyDrift(sourceDir: string, homeDir: string) {
+async function existingSkillEntries(root: string) {
+  if (!(await exists(root))) return []
+  return topLevelSkillEntries(root)
+}
+
+async function detectClaudeLegacyDrift(sourceDir: string, canonicalDir: string, homeDir: string) {
   const manifestPath = join(homeDir, '.claude', '.deploy-manifest.json')
   const manifest = await readJsonObject(manifestPath)
   const entries = await claudeLegacyEntries(sourceDir, homeDir)
@@ -496,15 +501,17 @@ async function detectClaudeLegacyDrift(sourceDir: string, homeDir: string) {
     }),
   )
   const legacySkillsDir = join(homeDir, '.claude', 'skills')
-  // Top-level entries this repository has ever owned: current source skills and
-  // anything recorded by the previous copy-based deploy. Other top-level entries
+  // Top-level entries this repository has ever owned: current source skills,
+  // anything recorded by the previous copy-based deploy, and canonical skills that
+  // reconcileRuntimeSkills will replace with symlinks. Other top-level entries
   // (e.g. Claude's own `synced/`) belong to someone else and are not drift.
-  const ownedTopLevel = new Set(
-    [...sourceRels, ...Object.keys(manifest)].flatMap((rel) => {
+  const ownedTopLevel = new Set([
+    ...[...sourceRels, ...Object.keys(manifest)].flatMap((rel) => {
       const [root, top] = rel.split(/[\\/]/)
       return root === 'skills' && top ? [top] : []
     }),
-  )
+    ...(await existingSkillEntries(canonicalDir)),
+  ])
 
   // Correct canonical symlinks are the post-migration state, not legacy files.
   // Only inspect real files under old copied skill directories here.
@@ -573,7 +580,7 @@ async function reconcileClaudeSkills({
   force?: boolean
   check?: boolean
 }) {
-  const drift = await detectClaudeLegacyDrift(sourceDir, homeDir)
+  const drift = await detectClaudeLegacyDrift(sourceDir, canonicalDir, homeDir)
   if (drift.length > 0 && !force) {
     reportConflicts('claude legacy skill drift detected:', drift)
     return false

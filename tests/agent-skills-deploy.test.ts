@@ -236,3 +236,26 @@ test('Claude drift check still inspects skills recorded only in the legacy manif
   })
   assert.equal(result, false)
 })
+
+test('Claude drift check inspects legacy dirs that shadow canonical-only skills', async (t) => {
+  const f = await fixture()
+  t.after(() => {
+    return rm(f.root, { recursive: true, force: true })
+  })
+
+  // A skill installed in ~/.agents/skills by another tool is also linked into
+  // ~/.claude/skills, so a real legacy directory with that name would be replaced.
+  await mkdir(join(f.targetDir, 'third-party'), { recursive: true })
+  await writeFile(join(f.targetDir, 'third-party', 'SKILL.md'), '# canonical\n')
+  const legacySkill = join(f.root, '.claude', 'skills', 'third-party')
+  await mkdir(legacySkill, { recursive: true })
+  await writeFile(join(legacySkill, 'SKILL.md'), '# local only\n')
+
+  const result = await deployAgentSkills({
+    sourceDir: f.sourceDir,
+    homeDir: f.root,
+    runtimes: ['claude'],
+  })
+  assert.equal(result, false)
+  assert.equal(await readFile(join(legacySkill, 'SKILL.md'), 'utf8'), '# local only\n')
+})
