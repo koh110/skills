@@ -164,8 +164,9 @@ conflict時はzero-guessingを優先します。
 1. `git status --short` とconflicted pathsを取得する。
 2. conflict marker、rename/delete、generated artifact等で意味判断が必要なら自動解決を続けない。
 3. 機械的に解決できる場合でも `git diff --check`、conflict marker検索、statusを確認する。
-4. `rebase --skip` をfailure recoveryのdefaultにしない。
-5. `rebase --continue` / merge continuationで別errorが出た場合、分類せずskipせず状態を保存して停止する。
+4. rebase完了後はconflictが発生した場合だけでなくauto-mergeだけで完了した場合も、新baseとの差分を確認してtypecheck/build/focused testなどrepositoryの意味検証を行ってからpushする。Git上でconflictがないことは、設定の上書きや重複propertyなど意味的な統合が正しい証拠ではない。
+5. `rebase --skip` をfailure recoveryのdefaultにしない。
+6. `rebase --continue` / merge continuationで別errorが出た場合、分類せずskipせず状態を保存して停止する。
 
 ## History rewrite and push
 
