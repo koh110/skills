@@ -13,6 +13,7 @@ node <このskillのdirectory>/scripts/check.ts [files...]
 ```
 
 - filesを省略するとgitの変更ファイル(未追跡を含む)を対象に、`vp fmt`(書き込み) → `vp lint` の順で実行する。`--check` を付けるとformatを書き込まず確認だけ行う
+- 既存fileでは最初に`--check`を実行し、write-format後のbaseとの差分も確認する。formatterが引用符・セミコロン・改行など既存範囲まで一括変更する場合、そのformat-only churnを機能変更へ混ぜない。format-only変更として分離するか、baseとcandidateの差分を確認して対象変更だけを残す。`--check`のfailureは既存baselineとcandidate側の新規差分を区別し、未整形baselineをcleanと報告しない
 - projectにlint/format設定(`vite.config.*` の `lint`/`fmt`、oxlint/oxfmt、eslint/prettier/biome/dprintの設定ファイル、またはそれらのpackageへの依存)がある場合はproject設定を優先する。vp以外のtoolの場合はscriptがその旨を表示してskipするので、projectのscriptでlint/formatを実行する
 - project設定が無い場合はskillの設定(`lint/oxfmt.json`、`lint/oxlint.json`、`lint/plugin.mjs`)を使う
 - code style(引用符、セミコロン、関数定義の形式、arrow functionの書き方、変数化)と、lintで検出できるルール(class、import path、forEach、`process.env`、`describe`、引数parser、`interface`、type assertion、返り値の型、`any`、filterの `is`)は文章で定義せず、skillのlint設定を正とする。対応ruleは `lint/oxlint.json` を参照
